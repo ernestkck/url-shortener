@@ -7,11 +7,11 @@ const pool = new Pool({
     database: process.env.DB_DATABASE,
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
-    // Add SSL configuration if required by your RDS setup
-    // ssl: {
-    //   rejectUnauthorized: false // Adjust as needed for security
-    // }
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
+
 
 pool.on('connect', () => {
     console.log('Connected to PostgreSQL database');
