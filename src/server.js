@@ -10,10 +10,10 @@ const redisClient = require('./redisClient');
 
 const optimus = new Optimus(process.env.OPTIMUS_PRIME, process.env.OPTIMUS_INVERSE, process.env.OPTIMUS_RANDOM);
 
-// Initialize the database and create the table if it doesn't exist
+// Initialise the database and create the table if it doesn't exist
 db.createTable().catch(err => {
     console.error('Error initialising database:', err.stack);
-    process.exit(1); // Exit the process if there's an error
+    process.exit(1); 
 });
 
 
@@ -55,10 +55,7 @@ app.get('/:shortCode', async (req, res) => {
 
         // Check expiration
         if (expires_at && new Date(expires_at) < new Date()) {
-             // Optionally delete expired entry from DB here or run a separate cleanup job
-             // await db.query('DELETE FROM urls WHERE short_code = $1', [shortCode]);
-             // Optionally remove from cache if it somehow existed
-             await redisClient.del(cacheKey);
+            await redisClient.del(cacheKey);
             return res.status(410).send('Short URL has expired.'); // 410 Gone
         }
 
@@ -72,7 +69,6 @@ app.get('/:shortCode', async (req, res) => {
                  await redisClient.del(cacheKey);
              }
         }
-        // If no expiration, maybe set a default TTL in Redis? e.g., redisClient.set(cacheKey, long_url, { EX: 3600 }); // Cache for 1 hour
 
         // Redirect
         return res.redirect(302, long_url);
@@ -109,11 +105,7 @@ app.post('/urls', async (req, res) => {
                 return res.status(409).json({ error: 'Custom alias already in use.' });
             }
         } else {
-            // Get unique ID from Redis counter
-            // const counterKey = 'url_counter';
-            // const uniqueId = await redisClient.incr(counterKey);
-            // shortCode = toBase62(uniqueId);
-
+            // Generate unique ID using PostgreSQL sequence
             try {
                 const sequenceResult = await db.query('SELECT nextval(\'urls_id_seq\') AS id;');
                 uniqueId = sequenceResult.rows[0].id;
@@ -128,7 +120,7 @@ app.post('/urls', async (req, res) => {
             }
         }
 
-        // Prepare expiration timestamp
+        // Handle expiration date
         let expiresAt = null;
         if (expirationDate) {
             // Basic validation
@@ -187,7 +179,7 @@ app.post('/urls', async (req, res) => {
 
     } catch (error) {
         console.error('Error creating short URL:', error);
-        // Handle potential duplicate key error if custom alias race condition occurs (rare)
+        // Handle potential duplicate key error
         if (error.code === '23505' && isCustom) { // PostgreSQL unique violation code
              return res.status(409).json({ error: 'Custom alias already in use.' });
         }
