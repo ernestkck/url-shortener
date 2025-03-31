@@ -1,14 +1,14 @@
 # URL Shortener
 
-A URL shortening service that creates compact, secure short URLs with customisable aliases and expiration, built with Node.js and hosted on AWS.
+A fast URL shortening service that creates unique, randomised short URLs with customisable aliases and expiration, built with Node.js and hosted on AWS.
 
 ## Features
 
 - **Custom Aliases**: Create branded or memorable short links
 - **Expiration Control**: Set custom expiration dates or use the default 1-year lifespan
-- **Database**: PostgreSQL on Amazon RDS
-- **Amazon ElastiCache for Redis**: Improve performance with caching
-- **Secure and unique URLs**: Unique counter with ID obfuscation
+- **Fast redirects with in-memory cache**: Amazon ElastiCache for Redis is used for caching
+- **Unique and randomised URLs**: Unique counter with ID obfuscation to guarantee collision-free and randomised URL generation
+- **High availability and scalability**: PostgreSQL database on Amazon RDS
 - **Base62 Encoding**: Creates short, alphanumeric codes for all URLs
 
 ## Tech Stack
@@ -44,7 +44,7 @@ A URL shortening service that creates compact, secure short URLs with customisab
    npm run dev
    
    # Production mode
-   npm start
+   npm start # or pm2 start src/server.js
    ```
 
 ## Environment Variables
