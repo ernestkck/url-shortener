@@ -6,7 +6,7 @@ const port = process.env.PORT || 3000;
 const validUrl = require('valid-url');
 const { toBase62 } = require('./utils');
 const db = require('./db');
-// const redisClient = require('./redisClient');
+const redisClient = require('./redisClient');
 
 const optimus = new Optimus(process.env.OPTIMUS_PRIME, process.env.OPTIMUS_INVERSE, process.env.OPTIMUS_RANDOM);
 
@@ -27,17 +27,17 @@ app.get('/', (req, res) => {
 // GET endpoint to retrieve the long URL from the short code
 app.get('/:shortCode', async (req, res) => {
     const { shortCode } = req.params;
-    // const cacheKey = `url:${shortCode}`;
+    const cacheKey = `url:${shortCode}`;
 
     try {
         // Check cache first
-        // const cachedUrl = await redisClient.get(cacheKey);
-        // if (cachedUrl) {
-        //     console.log(`Cache hit for ${shortCode}`);
-        //     return res.redirect(302, cachedUrl);
-        // }
+        const cachedUrl = await redisClient.get(cacheKey);
+        if (cachedUrl) {
+            console.log(`Cache hit for ${shortCode}`);
+            return res.redirect(302, cachedUrl);
+        }
 
-        // console.log(`Cache miss for ${shortCode}, checking DB...`);
+        console.log(`Cache miss for ${shortCode}, checking DB...`);
         
         // If cache miss, query database
         const queryText = `
@@ -58,16 +58,20 @@ app.get('/:shortCode', async (req, res) => {
              // Optionally delete expired entry from DB here or run a separate cleanup job
              // await db.query('DELETE FROM urls WHERE short_code = $1', [shortCode]);
              // Optionally remove from cache if it somehow existed
-             // await redisClient.del(cacheKey);
+             await redisClient.del(cacheKey);
             return res.status(410).send('Short URL has expired.'); // 410 Gone
         }
 
         // Cache the result
-        // await redisClient.set(cacheKey, long_url);
-        // if (expires_at) {
-        //      const expiryTimestamp = Math.floor(new Date(expires_at).getTime() / 1000);
-        //      await redisClient.expireAt(cacheKey, expiryTimestamp);
-        // }
+        await redisClient.set(cacheKey, long_url);
+        if (expires_at) {
+             const expiryTimestamp = Math.floor(new Date(expires_at).getTime() / 1000);
+             if (expiryTimestamp > Math.floor(Date.now()/1000)) {
+                 await redisClient.expireAt(cacheKey, expiryTimestamp);
+             } else {
+                 await redisClient.del(cacheKey);
+             }
+        }
         // If no expiration, maybe set a default TTL in Redis? e.g., redisClient.set(cacheKey, long_url, { EX: 3600 }); // Cache for 1 hour
 
         // Redirect
@@ -163,19 +167,19 @@ app.post('/urls', async (req, res) => {
         const generatedShortCode = result.rows[0].short_code;
 
         // Cache the new entry in Redis
-        // const cacheKey = `url:${generatedShortCode}`;
-        // await redisClient.set(cacheKey, longUrl);
-        // if (expiresAt) {
-        //     // Set Redis expiration slightly after DB expiration for safety
-        //     const expiryTimestamp = Math.floor(new Date(expiresAt).getTime() / 1000);
-        //     const nowTimestamp = Math.floor(Date.now() / 1000);
-        //     if (expiryTimestamp > nowTimestamp) {
-        //          await redisClient.expireAt(cacheKey, expiryTimestamp);
-        //     } else {
-        //          // Handle case where expiration is in the past (maybe shouldn't insert?)
-        //          await redisClient.del(cacheKey); // Delete if already expired
-        //     }
-        // }
+        const cacheKey = `url:${generatedShortCode}`;
+        await redisClient.set(cacheKey, longUrl);
+        if (expiresAt) {
+            // Set Redis expiration to match DB expiration
+            const expiryTimestamp = Math.floor(new Date(expiresAt).getTime() / 1000);
+            const nowTimestamp = Math.floor(Date.now() / 1000);
+            if (expiryTimestamp > nowTimestamp) {
+                 await redisClient.expireAt(cacheKey, expiryTimestamp);
+            } else {
+                 // Handle case where expiration is in the past
+                 await redisClient.del(cacheKey); // Delete if already expired
+            }
+        }
 
         // Return short URL
         const shortUrl = `${process.env.BASE_URL}/${generatedShortCode}`;
