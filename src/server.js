@@ -13,7 +13,7 @@ const optimus = new Optimus(process.env.OPTIMUS_PRIME, process.env.OPTIMUS_INVER
 // Initialise the database and create the table if it doesn't exist
 db.createTable().catch(err => {
     console.error('Error initialising database:', err.stack);
-    process.exit(1); 
+    process.exit(1);
 });
 
 
@@ -22,6 +22,12 @@ app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
     res.send('URL Shortener API is running!');
+});
+
+// Handle favicon.ico requests separately to prevent hitting the main logic
+app.get('/favicon.ico', (req, res) => {
+    // Respond with 204 No Content
+    res.status(204).end();
 });
 
 // GET endpoint to retrieve the long URL from the short code
@@ -38,7 +44,7 @@ app.get('/:shortCode', async (req, res) => {
         }
 
         console.log(`Cache miss for ${shortCode}, checking DB...`);
-        
+
         // If cache miss, query database
         const queryText = `
             SELECT long_url, expires_at
@@ -62,12 +68,12 @@ app.get('/:shortCode', async (req, res) => {
         // Cache the result
         await redisClient.set(cacheKey, long_url);
         if (expires_at) {
-             const expiryTimestamp = Math.floor(new Date(expires_at).getTime() / 1000);
-             if (expiryTimestamp > Math.floor(Date.now()/1000)) {
-                 await redisClient.expireAt(cacheKey, expiryTimestamp);
-             } else {
-                 await redisClient.del(cacheKey);
-             }
+            const expiryTimestamp = Math.floor(new Date(expires_at).getTime() / 1000);
+            if (expiryTimestamp > Math.floor(Date.now() / 1000)) {
+                await redisClient.expireAt(cacheKey, expiryTimestamp);
+            } else {
+                await redisClient.del(cacheKey);
+            }
         }
 
         // Redirect
@@ -80,7 +86,7 @@ app.get('/:shortCode', async (req, res) => {
 });
 
 // POST endpoint to create a new short URL
-app.post('/urls', async (req, res) => {
+app.post('/api/urls', async (req, res) => {
     const { longUrl, customAlias, expirationDate } = req.body;
 
     // Validate Long URL
@@ -97,7 +103,7 @@ app.post('/urls', async (req, res) => {
         if (isCustom) {
             // Validate customAlias 
             if (!/^[a-zA-Z0-9_-]+$/.test(customAlias) || customAlias.length < 1 || customAlias.length > 14) {
-                 return res.status(400).json({ error: 'Invalid custom alias format or length.' });
+                return res.status(400).json({ error: 'Invalid custom alias format or length.' });
             }
             // Check if custom alias already exists in DB
             const aliasCheck = await db.query('SELECT id FROM urls WHERE short_code = $1', [customAlias]);
@@ -126,9 +132,9 @@ app.post('/urls', async (req, res) => {
             // Basic validation
             const date = new Date(expirationDate);
             if (!isNaN(date)) {
-            expiresAt = date.toISOString();
+                expiresAt = date.toISOString();
             } else {
-            return res.status(400).json({ error: 'Invalid expiration date format.' });
+                return res.status(400).json({ error: 'Invalid expiration date format.' });
             }
         } else {
             // Default expiration time is 1 year
@@ -166,10 +172,10 @@ app.post('/urls', async (req, res) => {
             const expiryTimestamp = Math.floor(new Date(expiresAt).getTime() / 1000);
             const nowTimestamp = Math.floor(Date.now() / 1000);
             if (expiryTimestamp > nowTimestamp) {
-                 await redisClient.expireAt(cacheKey, expiryTimestamp);
+                await redisClient.expireAt(cacheKey, expiryTimestamp);
             } else {
-                 // Handle case where expiration is in the past
-                 await redisClient.del(cacheKey); // Delete if already expired
+                // Handle case where expiration is in the past
+                await redisClient.del(cacheKey); // Delete if already expired
             }
         }
 
@@ -181,7 +187,7 @@ app.post('/urls', async (req, res) => {
         console.error('Error creating short URL:', error);
         // Handle potential duplicate key error
         if (error.code === '23505' && isCustom) { // PostgreSQL unique violation code
-             return res.status(409).json({ error: 'Custom alias already in use.' });
+            return res.status(409).json({ error: 'Custom alias already in use.' });
         }
         res.status(500).json({ error: 'Internal Server Error' });
     }
